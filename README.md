@@ -16,7 +16,21 @@ Just do
 `sudo apt install libssl-dev;  npm install https://github.com/sdrsdr/sane_aes128_cbc.git`
 and you should be all set
 
-see eample/sane_cypto.js for example
+# Example 
+
+see example/sane_cypto.js for example
+
+to run the example from the freshly cloned repo do
+
+```
+npm install
+node example/sane_crypto.js 
+```
+
+post `npm install` if you modify src/sane_aes128_cbc.c, you can do 
+`./node_modules/.bin/node-gyp build && node example/sane_crypto.js`
+to rebuild the module and run the test javascript code
+
 
 
 # License

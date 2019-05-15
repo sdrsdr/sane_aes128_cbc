@@ -28,18 +28,23 @@
 #define AES_BLOCK_SIZE 16
 #define AES_KEY_SIZE AES_BLOCK_SIZE
 
+#if __WORDSIZE == 64
+#define AES_BLOCK_WORD uint64_t
+typedef struct aes_block_t{ AES_BLOCK_WORD w[2]; } aes_block_t; //should be of size AES_BLOCK_SIZE
+static inline void copy_state(aes_block_t *src,aes_block_t *dest) { dest->w[0]=src->w[0]; dest->w[1]=src->w[1]; };
+static inline void xor_state(aes_block_t *src,aes_block_t *dest) { dest->w[0]^=src->w[0]; dest->w[1]^=src->w[1]; };
+#else 
+#define AES_BLOCK_WORD uint32_t
+typedef struct aes_block_t{ AES_BLOCK_WORD w[4];} aes_block_t; //should be of size AES_BLOCK_SIZE
+static inline void copy_state(aes_block_t *src,aes_block_t *dest) { dest->w[0]=src->w[0]; dest->w[1]=src->w[1]; dest->w[2]=src->w[2]; dest->w[3]=src->w[3]; };
+static inline void xor_state(aes_block_t *src,aes_block_t *dest) { dest->w[0]^=src->w[0]; dest->w[1]^=src->w[1]; dest->w[2]^=src->w[2]; dest->w[3]^=src->w[3]; };
+#endif
+
+
 typedef struct sane_aes_ctx_t  {
 	AES_KEY key;
-	uint8_t state[AES_BLOCK_SIZE];
+	aes_block_t state;
 } sane_aes_ctx_t;
-
-napi_value hello(napi_env env, napi_callback_info info) {
-  napi_status status;
-  napi_value world;
-  status = napi_create_string_utf8(env, "world", 5, &world);
-  assert(status == napi_ok);
-  return world;
-}
 
 
 napi_value getEncryptCtx(napi_env env, napi_callback_info info) {
@@ -98,7 +103,7 @@ napi_value getEncryptCtx(napi_env env, napi_callback_info info) {
 	status = napi_create_buffer(env,sizeof(sane_aes_ctx_t), (void **)(&ctx), &ctx_buf);
 	assert(status == napi_ok);
 	AES_set_encrypt_key((unsigned char *)key_data,AES_KEY_SIZE*8,&ctx->key);
-	memcpy(ctx->state,iv_data,AES_BLOCK_SIZE);
+	memcpy(&ctx->state,iv_data,AES_BLOCK_SIZE);
 	return ctx_buf;
 }
 
@@ -158,7 +163,7 @@ napi_value getDecryptCtx(napi_env env, napi_callback_info info) {
 	status = napi_create_buffer(env,sizeof(sane_aes_ctx_t), (void **)(&ctx), &ctx_buf);
 	assert(status == napi_ok);
 	AES_set_decrypt_key((unsigned char *)key_data,AES_KEY_SIZE*8,&ctx->key);
-	memcpy(ctx->state,iv_data,AES_BLOCK_SIZE);
+	memcpy(&ctx->state,iv_data,AES_BLOCK_SIZE);
 	return ctx_buf;
 }
 
@@ -214,17 +219,18 @@ napi_value Encrypt(napi_env env, napi_callback_info info) {
 		return NULL;
 	}
 
-	uint8_t *block_at=(uint8_t *)in_data;
-	uint8_t *block_end=block_at+in_data_len;
-	uint8_t *prev_cyphertext=ctx->state;
-	uint8_t out[AES_BLOCK_SIZE];
+	aes_block_t *block_at=(aes_block_t *)in_data;
+	aes_block_t *block_end=(aes_block_t *)(in_data+in_data_len);
+	aes_block_t *prev_cyphertext=&ctx->state;
+	aes_block_t out;
 	while (block_at<block_end) {
-		for (int i=0; i<AES_BLOCK_SIZE; i++) block_at[i]=block_at[i] ^ prev_cyphertext[i];
-		AES_encrypt(block_at,out,&ctx->key);
-		for (int i=0; i<AES_BLOCK_SIZE; i++) block_at[i]=out[i];
-		prev_cyphertext=block_at; block_at+=AES_BLOCK_SIZE;
+		xor_state(prev_cyphertext,block_at);
+		AES_encrypt((const unsigned char*)block_at,(uint8_t*)&out,&ctx->key);
+		copy_state(&out,block_at);
+		prev_cyphertext=block_at; 
+		block_at+=1;
 	}
-	for (int i=0; i<AES_BLOCK_SIZE; i++) ctx->state[i]=prev_cyphertext[i];
+	copy_state(prev_cyphertext,&ctx->state);
 	
 	return NULL;
 }
@@ -282,31 +288,47 @@ napi_value Decrypt(napi_env env, napi_callback_info info) {
 		return NULL;
 	}
 
-	uint8_t *block_at=(uint8_t *)in_data;
-	uint8_t *block_end=block_at+in_data_len;
-	uint8_t *prev_cyphertext=ctx->state;
 
-	uint8_t out[AES_BLOCK_SIZE];
+	aes_block_t *block_at=(aes_block_t *)in_data;
+	aes_block_t *block_end=(aes_block_t *)(in_data+in_data_len);
+	aes_block_t *prev_cyphertext=&ctx->state;
+	aes_block_t out;
+
 	while (block_at<block_end) {
-		AES_decrypt(block_at,out,&ctx->key);
-		for (int i=0; i<AES_BLOCK_SIZE; i++) {
-			uint8_t store=out[i] ^ prev_cyphertext[i];
-			prev_cyphertext[i]=block_at[i];
-			block_at[i]=store;
-		}
+		AES_decrypt((const unsigned char*)&block_at->w,(unsigned char*)&out.w,&ctx->key);
+		AES_BLOCK_WORD store;
 
-		block_at+=AES_BLOCK_SIZE;
+		store=out.w[0] ^ prev_cyphertext->w[0];
+		prev_cyphertext->w[0]=block_at->w[0];
+		block_at->w[0]=store;
+
+		store=out.w[1] ^ prev_cyphertext->w[1];
+		prev_cyphertext->w[1]=block_at->w[1];
+		block_at->w[1]=store;
+
+
+		#if __WORDSIZE != 64
+
+		store=out.w[2] ^ prev_cyphertext->w[2];
+		prev_cyphertext->w[2]=block_at->w[2];
+		block_at->w[2]=store;
+
+		store=out.w[3] ^ prev_cyphertext->w[3];
+		prev_cyphertext->w[3]=block_at->w[3];
+		block_at->w[3]=store;
+
+		#endif
+
+		block_at+=1;
 	}
 	return NULL;
 }
 
 
 
-#define DECLARE_NAPI_METHOD(name, func)                          \
-  { name, 0, func, 0, 0, 0, napi_default, 0 }
+#define DECLARE_NAPI_METHOD(name, func) { name, 0, func, 0, 0, 0, napi_default, 0 }
 
 napi_property_descriptor methods[]={
-	DECLARE_NAPI_METHOD("hello", hello),
 	DECLARE_NAPI_METHOD("getEncryptCtx", getEncryptCtx),
 	DECLARE_NAPI_METHOD("getDecryptCtx", getDecryptCtx),
 	DECLARE_NAPI_METHOD("Encrypt",Encrypt),
@@ -314,14 +336,14 @@ napi_property_descriptor methods[]={
 };
 
 napi_value Init(napi_env env, napi_value exports) {
-  napi_status status;
+	napi_status status;
 
 
-  status = napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods);
-  assert(status == napi_ok);
+	status = napi_define_properties(env, exports, sizeof(methods)/sizeof(methods[0]), methods);
+	assert(status == napi_ok);
 
 
-  return exports;
+	return exports;
 }
 
 NAPI_MODULE(NODE_GYP_MODULE_NAME, Init)

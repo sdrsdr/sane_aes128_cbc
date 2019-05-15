@@ -1,6 +1,6 @@
 {
   "name": "sane_aes128_cbc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "nodejs openssl based module for sane aes-128-cbc crypto without callbacks and retaining of final block",
   "main": "build/Release/sane_aes128_cbc.node",
   "repository": {
