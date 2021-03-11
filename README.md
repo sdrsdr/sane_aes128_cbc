@@ -13,7 +13,7 @@ All you need is openssl development files installed libssl-dev package in ubuntu
 and a node-gyp with it's dependacines such as the gcc compiler and friends.
 
 Just do
-`sudo apt install libssl-dev;  npm install https://github.com/sdrsdr/sane_aes128_cbc.git`
+`sudo apt install libssl-dev;  npm install sane_aes128_cbc`
 and you should be all set
 
 # Example 

@@ -46,6 +46,56 @@ typedef struct sane_aes_ctx_t  {
 	aes_block_t state;
 } sane_aes_ctx_t;
 
+napi_value setCtxIv(napi_env env, napi_callback_info info) {
+	napi_status status;
+
+	size_t argc = 2;
+	napi_value args[2];
+	status = napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+	assert(status == napi_ok);
+	if (argc!=2) {
+		napi_throw_error(env, NULL, "Arguments should be TWO buffers containing a ctx and iv");
+		return NULL;
+	};
+	bool is_buf=false;
+	if (napi_is_buffer(env,args[0],&is_buf)!=napi_ok) {
+		napi_throw_error(env, NULL, "Arguments should be two BUFFERS containing a ctx and iv");
+		return NULL;
+	}
+
+	is_buf=false;
+	if (napi_is_buffer(env,args[1],&is_buf)!=napi_ok) {
+		napi_throw_error(env, NULL, "Arguments should be two BUFFERS containing a ctx and iv");
+		return NULL;
+	}
+	if (is_buf==false) {
+		napi_throw_error(env, NULL, "Arguments should be two BUFFERS containing a ctx and iv");
+		return NULL;
+	}
+
+	void *ctx_data; size_t ctx_data_len;
+	void *iv_data; size_t iv_data_len;
+	if (napi_get_buffer_info(env,args[0],&ctx_data,&ctx_data_len)!=napi_ok){
+		napi_throw_error(env, NULL, "Arguments should be two BUFFERS containing a ctx and iv");
+		return NULL;
+	}
+	if (ctx_data_len!=sizeof(sane_aes_ctx_t)) {
+		napi_throw_error(env, NULL, "ctx size mismatch");
+		return NULL;
+	}
+
+	if (napi_get_buffer_info(env,args[1],&iv_data,&iv_data_len)!=napi_ok){
+		napi_throw_error(env, NULL, "Arguments should be two BUFFERS containing a ctx and iv");
+		return NULL;
+	}
+	if (iv_data_len!=AES_BLOCK_SIZE) {
+		napi_throw_error(env, NULL, "iv size mismatch");
+		return NULL;
+	}
+	sane_aes_ctx_t* ctx=ctx_data;
+	memcpy(&ctx->state,iv_data,AES_BLOCK_SIZE);
+	return NULL;
+}
 
 napi_value getEncryptCtx(napi_env env, napi_callback_info info) {
 	napi_status status;
@@ -332,7 +382,8 @@ napi_property_descriptor methods[]={
 	DECLARE_NAPI_METHOD("getEncryptCtx", getEncryptCtx),
 	DECLARE_NAPI_METHOD("getDecryptCtx", getDecryptCtx),
 	DECLARE_NAPI_METHOD("Encrypt",Encrypt),
-	DECLARE_NAPI_METHOD("Decrypt",Decrypt)
+	DECLARE_NAPI_METHOD("Decrypt",Decrypt),
+	DECLARE_NAPI_METHOD("setCtxIv",setCtxIv)
 };
 
 napi_value Init(napi_env env, napi_value exports) {
