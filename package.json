@@ -1,13 +1,13 @@
 {
   "name": "sane_aes128_cbc",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "nodejs openssl based module for sane aes-128-cbc crypto without callbacks and retaining of final block",
   "main": "build/Release/sane_aes128_cbc.node",
   "repository": {
     "type": "git",
     "url": "https://github.com/sdrsdr/sane_aes128_cbc.git"
   },
-  "keywords": ["aes aes-cbc aes-128-cbc"],
+  "keywords": ["aes","aes-cbc","aes-128-cbc"],
   "author": "Stoian Ivanov",
   "license": "LGPLv3",
   "devDependencies": {
