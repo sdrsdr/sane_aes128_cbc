@@ -11,6 +11,6 @@
   "author": "Stoian Ivanov",
   "license": "LGPLv3",
   "devDependencies": {
-    "node-gyp": "^4.0.0"
+    "node-gyp": "^9.0.0"
   }
 }
